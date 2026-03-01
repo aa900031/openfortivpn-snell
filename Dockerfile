@@ -1,20 +1,19 @@
-FROM alpine:3.15 AS builder-openfortivpn
+FROM debian:bookworm-slim AS builder-openfortivpn
 
 ARG OPENFORTIVPN_VERSION=v1.24.1
 
-RUN apk update \
-    && apk upgrade \
-    && apk add --no-cache \
-        openssl-dev \
-        ppp \
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
         ca-certificates \
         curl \
-    && apk add --no-cache --virtual .build-deps \
+        ppp \
         automake \
         autoconf \
         g++ \
         gcc \
         make \
+        pkg-config \
+        libssl-dev \
     && mkdir -p "/usr/src/openfortivpn" \
     && cd "/usr/src/openfortivpn" \
     && curl -Ls https://github.com/adrienverge/openfortivpn/archive/${OPENFORTIVPN_VERSION}.tar.gz \
@@ -24,53 +23,53 @@ RUN apk update \
     && automake --add-missing \
     && ./configure --prefix=/usr --sysconfdir=/etc \
     && make \
-    && make install \
-    && apk del .build-deps
+    && make install
 
-FROM alpine:3.15 AS builder-snell
+FROM debian:bookworm-slim AS builder-snell
 
 ARG SNELL_VERSION=v5.0.1
 ARG TARGETARCH
 
-RUN apk add --no-cache curl unzip && \
-    mkdir -p /tmp/snell-download && \
-    cd /tmp/snell-download && \
-    case "${TARGETARCH}" in \
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        ca-certificates \
+        curl \
+        unzip \
+    && mkdir -p /tmp/snell-download \
+    && cd /tmp/snell-download \
+    && case "${TARGETARCH}" in \
         amd64) SNELL_ARCH="amd64" ;; \
         386) SNELL_ARCH="i386" ;; \
         arm64) SNELL_ARCH="aarch64" ;; \
         arm) SNELL_ARCH="armv7l" ;; \
         *) echo "Unsupported architecture: ${TARGETARCH}" && exit 1 ;; \
-    esac && \
-    curl -Ls https://dl.nssurge.com/snell/snell-server-${SNELL_VERSION}-linux-${SNELL_ARCH}.zip -o snell-server.zip && \
-    unzip -q snell-server.zip && \
-    mv snell-server /usr/bin/snell-server && \
-    chmod +x /usr/bin/snell-server && \
-    cd / && \
-    rm -rf /tmp/snell-download
+    esac \
+    && curl -Ls https://dl.nssurge.com/snell/snell-server-${SNELL_VERSION}-linux-${SNELL_ARCH}.zip -o snell-server.zip \
+    && unzip -q snell-server.zip \
+    && mv snell-server /usr/bin/snell-server \
+    && chmod +x /usr/bin/snell-server \
+    && cd / \
+    && rm -rf /tmp/snell-download
 
-FROM alpine:3.15
+FROM debian:bookworm-slim
 
-RUN \
-    apk add --no-cache curl && \
-    curl -Ls https://gist.githubusercontent.com/aa900031/334d4617d11b3d3701d8769292444e0c/raw/88cb036ad150e46593f36574a617f59e90b2a464/get-apline-glibc.sh | sh \
-    && \
-    echo @edge http://dl-cdn.alpinelinux.org/alpine/edge/community >> /etc/apk/repositories \
-    && \
-    apk add --no-cache \
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
         ca-certificates \
         openssl \
         ppp \
-        su-exec \
         bash \
         supervisor \
-        oath-toolkit-oathtool \
-    && \
-    rm -rf /var/cache/apk/*
+        oathtool \
+        curl \
+        iproute2 \
+        libssl3 \
+    && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder-openfortivpn /usr/bin/openfortivpn /usr/bin/openfortivpn
 COPY --from=builder-snell /usr/bin/snell-server /usr/bin/snell-server
 COPY docker-entrypoint.sh /
+RUN chmod +x /docker-entrypoint.sh
 
 ENV \
     SNELL_PSK= \
