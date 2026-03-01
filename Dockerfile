@@ -59,7 +59,7 @@ RUN apt-get update && \
         openssl \
         ppp \
         bash \
-        supervisor \
+        tini \
         oathtool \
         curl \
         iproute2 \
@@ -88,5 +88,5 @@ ENV \
 
 WORKDIR /
 
-ENTRYPOINT ["/docker-entrypoint.sh"]
-CMD [ "supervisor" ]
+ENTRYPOINT ["/usr/bin/tini", "--", "/docker-entrypoint.sh"]
+CMD [ "start" ]

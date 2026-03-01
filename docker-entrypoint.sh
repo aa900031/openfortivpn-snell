@@ -60,34 +60,27 @@ function _exec_openfortivpn ()
     fi
 }
 
-function _exec_supervisor()
+function _exec_start()
 {
-    local PATH_SUPERVISOR_CONFIG_DIR="/etc/supervisor/conf.d"
-    local PATH_SUPERVISOR_CONFIG="$PATH_SUPERVISOR_CONFIG_DIR/supervisord.conf"
-    local PATH_OPENFORTIVPN_LOG_DIR="/var/log/openfortivpn"
-    local PATH_SNELL_LOG_DIR="/var/log/snell"
+    _exec_snell &
+    SNELL_PID=$!
+    echo "Started snell-server with PID $SNELL_PID"
 
-    mkdir -p $PATH_SUPERVISOR_CONFIG_DIR
-    mkdir -p $PATH_OPENFORTIVPN_LOG_DIR
-    mkdir -p $PATH_SNELL_LOG_DIR
+    _exec_openfortivpn &
+    VPN_PID=$!
+    echo "Started openfortivpn with PID $VPN_PID"
 
-    cat <<EOF >>$PATH_SUPERVISOR_CONFIG
-[supervisord]
-nodaemon=true
+    trap "kill $SNELL_PID $VPN_PID; exit 0" SIGINT SIGTERM
 
-[program:openfortivpn]
-command=/docker-entrypoint.sh openfortivpn
+    wait -n
 
-[program:snell]
-command=/docker-entrypoint.sh snell
-EOF
-
-    /usr/bin/supervisord -c $PATH_SUPERVISOR_CONFIG
+    echo "One of the processes exited. Stopping all..."
+    kill $SNELL_PID $VPN_PID 2>/dev/null || true
 }
 
 case "$@" in
-    "supervisor" )
-        _exec_supervisor
+    "start" )
+        _exec_start
     ;;
 
     "snell" )
